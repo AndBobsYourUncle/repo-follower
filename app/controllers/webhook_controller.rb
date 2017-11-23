@@ -65,10 +65,12 @@ class WebhookController < ApplicationController
 
       client.update_ref CHILD_REPO, 'heads/follower-changes', sha_new_commit
 
-      client.create_pull_request(
+      pr = client.create_pull_request(
         CHILD_REPO, 'master', 'follower-changes',
         'Update from master repo', 'This is an automatic update from the master repo.'
       )
+
+      client.merge_pull_request CHILD_REPO, pr[:number], 'App successfully updated from master repr.'
 
       render :webhook
     else
