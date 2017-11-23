@@ -13,29 +13,6 @@ class WebhookController < ApplicationController
     payload_body = request.body.read
 
     if payload_authorized?(payload_body)
-      private_pem = File.read 'config/github_keys/repo-follower.pem'
-      private_key = OpenSSL::PKey::RSA.new(private_pem)
-
-      payload = {
-        iat: Time.now.to_i,
-        exp: Time.now.to_i + (10 * 60),
-        iss: APP_ID
-      }
-
-      jwt = JWT.encode payload, private_key, 'RS256'
-
-      uri = URI.parse "https://api.github.com/installations/#{INSTALLATION_ID}/access_tokens"
-      http = Net::HTTP.new uri.host, uri.port
-      http.use_ssl = true
-
-      request = Net::HTTP::Post.new uri.request_uri
-      request['Authorization'] = "Bearer #{jwt}"
-      request['Accept'] = 'application/vnd.github.machine-man-preview+json'
-
-      response = http.request request
-
-      access_token = JSON.parse(response.body)['token']
-
       client = Octokit::Client.new(access_token: access_token)
 
       sha_latest_commit_child = client.ref(CHILD_REPO, 'heads/master').object.sha
@@ -82,6 +59,39 @@ class WebhookController < ApplicationController
   end
 
   private
+
+  def github_private_key
+    if Rails.env.development?
+      File.read 'config/github_keys/repo-follower.pem'
+    else
+      Rails.application.secrets.github_private_pem
+    end
+    OpenSSL::PKey::RSA.new(private_pem)
+  end
+
+  def github_jwt
+    payload = {
+      iat: Time.now.to_i,
+      exp: Time.now.to_i + (10 * 60),
+      iss: APP_ID
+    }
+
+    JWT.encode payload, github_private_key, 'RS256'
+  end
+
+  def access_token
+    uri = URI.parse "https://api.github.com/installations/#{INSTALLATION_ID}/access_tokens"
+    http = Net::HTTP.new uri.host, uri.port
+    http.use_ssl = true
+
+    request = Net::HTTP::Post.new uri.request_uri
+    request['Authorization'] = "Bearer #{github_jwt}"
+    request['Accept'] = 'application/vnd.github.machine-man-preview+json'
+
+    response = http.request request
+
+    JSON.parse(response.body)['token']
+  end
 
   def payload_authorized?(payload_body)
     signature = 'sha1=' + OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new('sha1'), Rails.application.secrets.webhook_secret, payload_body)
