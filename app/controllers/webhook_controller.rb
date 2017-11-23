@@ -61,7 +61,7 @@ class WebhookController < ApplicationController
   private
 
   def github_private_key
-    if Rails.env.development?
+    private_pem = if Rails.env.development?
       File.read 'config/github_keys/repo-follower.pem'
     else
       Rails.application.secrets.github_private_pem
