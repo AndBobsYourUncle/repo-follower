@@ -63,8 +63,12 @@ class WebhookController < ApplicationController
       commit_message = 'Merged from follower repo.'
       sha_new_commit = client.create_commit(CHILD_REPO, commit_message, sha_new_tree, sha_latest_commit_child).sha
 
-      updated_ref = client.update_ref CHILD_REPO, 'heads/follower-changes', sha_new_commit
-      puts updated_ref.inspect if Rails.env.development? # rubocop:disable Rails/Output
+      client.update_ref CHILD_REPO, 'heads/follower-changes', sha_new_commit
+
+      client.create_pull_request(
+        CHILD_REPO, 'master', 'follower-changes',
+        'Update from master repo', 'This is an automatic update from the master repo.'
+      )
 
       render :webhook
     else
