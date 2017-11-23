@@ -7,7 +7,7 @@ class WebhookController < ApplicationController
   MAIN_REPO = 'AndBobsYourUncle/repo-follower'
   CHILD_REPO = 'AndBobsYourUncle/repo-follower-child'
   APP_ID = 6956
-  INSTALLATION_ID = 69_303
+  INSTALLATION_ID = 69_328
 
   def handle_webhook
     request.body.rewind
