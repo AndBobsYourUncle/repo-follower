@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'net/http'
+require 'base64'
 
 class WebhookController < ApplicationController
   MAIN_REPO = 'AndBobsYourUncle/repo-follower'
@@ -83,7 +84,7 @@ class WebhookController < ApplicationController
     private_pem = if Rails.env.development?
       File.read 'config/github_keys/repo-follower.pem'
     else
-      Rails.application.secrets.github_private_pem
+      Base64.strict_decode64(ENV['GITHUB_PRIVATE_PEM'])
     end
     OpenSSL::PKey::RSA.new(private_pem)
   end
