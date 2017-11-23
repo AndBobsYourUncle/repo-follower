@@ -6,7 +6,7 @@ class WebhookController < ApplicationController
   def handle_webhook
     request.body.rewind
     payload_body = request.body.read
-    pp params[:webhook]
+    pp params[:webhook].to_h
 
     if payload_authorized?(payload_body)
       render :webhook
