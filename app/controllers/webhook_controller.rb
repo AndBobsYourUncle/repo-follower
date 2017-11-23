@@ -2,6 +2,6 @@
 
 class WebhookController < ApplicationController
   def handle_webhook
-    puts 'HAHAHA'
+    render :webhook
   end
 end
