@@ -15,39 +15,9 @@ class WebhookController < ApplicationController
     if payload_authorized?(payload_body)
       client = Octokit::Client.new(access_token: access_token)
 
-      sha_latest_commit_child = client.ref(CHILD_REPO, 'heads/master').object.sha
-      client.create_ref CHILD_REPO, 'heads/follower-changes', sha_latest_commit_child rescue Octokit::UnprocessableEntity
+      commit_following_changes client
 
-      sha_latest_commit = client.ref(MAIN_REPO, 'heads/master').object.sha
-      last_main_commit = client.commit MAIN_REPO, sha_latest_commit
-
-      new_tree_object = last_main_commit[:files].map do |file|
-        blob = client.blob MAIN_REPO, file[:sha]
-
-        blob_sha = client.create_blob CHILD_REPO, blob[:content], 'base64'
-
-        {
-          path: file[:filename],
-          mode: '100644',
-          type: 'blob',
-          sha: blob_sha
-        }
-      end
-
-      sha_base_tree = client.commit(CHILD_REPO, sha_latest_commit_child).commit.tree.sha
-      sha_new_tree = client.create_tree(CHILD_REPO, new_tree_object, base_tree: sha_base_tree).sha
-
-      commit_message = 'Merged from follower repo.'
-      sha_new_commit = client.create_commit(CHILD_REPO, commit_message, sha_new_tree, sha_latest_commit_child).sha
-
-      client.update_ref CHILD_REPO, 'heads/follower-changes', sha_new_commit
-
-      pr = client.create_pull_request(
-        CHILD_REPO, 'master', 'follower-changes',
-        'Update from master repo', 'This is an automatic update from the master repo.'
-      )
-
-      client.merge_pull_request CHILD_REPO, pr[:number], 'App successfully updated from master repr.'
+      merge_following_pr client
 
       render :webhook
     else
@@ -59,6 +29,55 @@ class WebhookController < ApplicationController
   end
 
   private
+
+  def merge_following_pr client
+    pr = client.create_pull_request(
+      CHILD_REPO, 'master', 'follower-changes',
+      'Update from master repo', 'This is an automatic update from the master repo.'
+    )
+
+    client.merge_pull_request CHILD_REPO, pr[:number], 'App successfully updated from master repr.'
+  end
+
+  def commit_following_changes client
+    follower_branch_sha = create_new_follower_branch client
+
+    commit_message = 'Merged from follower repo.'
+    sha_new_commit = client.create_commit(CHILD_REPO, commit_message, new_follower_branch_tree(client, follower_branch_sha), follower_branch_sha).sha
+
+    client.update_ref CHILD_REPO, 'heads/follower-changes', sha_new_commit
+  end
+
+  def new_follower_branch_tree client, follower_branch_sha
+    sha_base_tree = client.commit(CHILD_REPO, follower_branch_sha).commit.tree.sha
+    client.create_tree(CHILD_REPO, new_tree_object(client), base_tree: sha_base_tree).sha
+  end
+
+  def new_tree_object client
+    last_main_commit(client)[:files].map do |file|
+      blob = client.blob MAIN_REPO, file[:sha]
+
+      blob_sha = client.create_blob CHILD_REPO, blob[:content], 'base64'
+
+      {
+        path: file[:filename],
+        mode: '100644',
+        type: 'blob',
+        sha: blob_sha
+      }
+    end
+  end
+
+  def last_main_commit client
+    sha_latest_commit = client.ref(MAIN_REPO, 'heads/master').object.sha
+    client.commit MAIN_REPO, sha_latest_commit
+  end
+
+  def create_new_follower_branch client
+    sha_latest_commit_child = client.ref(CHILD_REPO, 'heads/master').object.sha
+    client.create_ref CHILD_REPO, 'heads/follower-changes', sha_latest_commit_child rescue Octokit::UnprocessableEntity
+    sha_latest_commit_child
+  end
 
   def github_private_key
     private_pem = if Rails.env.development?
